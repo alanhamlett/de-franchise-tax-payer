@@ -158,7 +158,7 @@ async function page1_enterFileNumber(page: Page, options: CLIOptions): Promise<v
   // Solve the captcha
   console.log('Step 1: Solving captcha...');
 
-  const maxAttempts = 5;
+  const maxAttempts = 2;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     // Get captcha image as base64
     const captchaImg = await page.$('#ctl00_ContentPlaceHolder1_ecorpCaptcha1_captchaImage');
@@ -405,7 +405,10 @@ async function main(): Promise<void> {
     const page = await browser.newPage();
     await page.emulateMediaType('screen');
     await page.setViewport({ width: 1920, height: 1080 });
-    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36');
+    await page.setUserAgent({
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
+      platform: 'MacIntel',
+    });
 
     // Step 1: Enter file number and solve captcha
     await page1_enterFileNumber(page, options);
