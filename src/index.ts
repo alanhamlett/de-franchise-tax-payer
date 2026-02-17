@@ -284,8 +284,20 @@ async function page2_reviewAndPay(page: Page, options: CLIOptions): Promise<void
     throw new Error('Amount due is $0.00 or negative. Nothing to pay.');
   }
 
-  // Click "Pay Taxes" button
-  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle2' }), page.click('#ctl00_ContentPlaceHolder1_btnPayTax')]);
+  // Click "Pay Taxes" button. This may trigger multiple navigations (ASP.NET
+  // postback then redirect to Payment.aspx), so keep waiting until the URL
+  // contains "Payment.aspx" and the page is stable.
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {}),
+    page.click('#ctl00_ContentPlaceHolder1_btnPayTax'),
+  ]);
+
+  // Wait for possible second navigation (redirect to Payment.aspx)
+  if (!page.url().includes('Payment.aspx')) {
+    await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {});
+  }
+  // Extra settle time for any remaining ASP.NET lifecycle activity
+  await delay(2000);
 
   console.log('Step 2: Proceeded to payment page.');
 }
