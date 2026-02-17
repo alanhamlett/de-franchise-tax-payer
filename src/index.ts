@@ -396,14 +396,32 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
 
   await printPageHtml(page, options.verbose);
 
-  // Click Submit. The page may do a full navigation or an in-place UpdatePanel
-  // postback, so try waiting for navigation but fall back to waiting for the
-  // network to go idle if no navigation occurs.
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {}),
-    page.click('#ctl00_ContentPlaceHolder1_PaymentControl1_BtnSave'),
-  ]);
-  await delay(3000);
+  // Click Submit. Payment processing can take a while. The page may navigate
+  // to a confirmation page or update in-place. Wait for up to 2 minutes.
+  const submitNavPromise = page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 120000 }).catch(() => {});
+  await page.click('#ctl00_ContentPlaceHolder1_PaymentControl1_BtnSave');
+
+  // Wait for the page content to change (payment div disappears or page navigates)
+  try {
+    await page.waitForFunction(
+      () => {
+        const payDiv = document.getElementById('ctl00_ContentPlaceHolder1_PaymentControl1_divPayment');
+        // Payment div hidden/removed means the page updated
+        if (!payDiv || payDiv.style.display === 'none') return true;
+        // Or we navigated away from Payment.aspx
+        if (!window.location.href.includes('Payment.aspx')) return true;
+        // Or a confirmation/receipt appeared
+        const text = document.body.innerText.toLowerCase();
+        if (text.includes('confirmation') || text.includes('receipt') || text.includes('successful')) return true;
+        return false;
+      },
+      { timeout: 120000 }
+    );
+  } catch {
+    // Timeout waiting for change — fall through to check what we have
+  }
+  await submitNavPromise;
+  await delay(2000);
 
   await printPageHtml(page, options.verbose);
 
@@ -411,13 +429,6 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
   console.log('Step 3: Checking payment result...');
 
   const pageText = await page.evaluate(() => document.body.innerText);
-  const pageHtml = await page.content();
-
-  // Check for common error indicators
-  const hasError =
-    pageHtml.includes('style="color:Red;display: inline') ||
-    (pageHtml.includes('ValidationSummary') && pageHtml.includes('display:inline')) ||
-    (pageText.toLowerCase().includes('error') && pageText.toLowerCase().includes('payment'));
 
   // Check for success indicators
   const hasConfirmation =
@@ -427,23 +438,39 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
     pageText.toLowerCase().includes('thank you') ||
     pageText.toLowerCase().includes('payment has been');
 
-  if (hasConfirmation && !hasError) {
+  if (hasConfirmation) {
     console.log('Payment submitted successfully!');
-  } else if (hasError) {
-    // Try to extract the error message
+  } else {
+    // Check for validation errors (visible error spans, not the static warning note)
     const errorMessages = await page.evaluate(() => {
       const errors: string[] = [];
-      document.querySelectorAll('[style*="color:Red"], .reqdtxt, .errorvalidation').forEach((el) => {
-        const text = el.textContent?.trim();
-        if (text) errors.push(text);
+      document.querySelectorAll('.errorvalidation, .reqdtxt').forEach((el) => {
+        const style = window.getComputedStyle(el);
+        if (style.display !== 'none' && el.textContent?.trim()) {
+          errors.push(el.textContent.trim());
+        }
+      });
+      // Also check validation summaries that became visible
+      document.querySelectorAll('[id*="ValidationSummary"]').forEach((el) => {
+        const style = window.getComputedStyle(el);
+        if (style.display !== 'none' && el.textContent?.trim()) {
+          errors.push(el.textContent.trim());
+        }
       });
       return errors.filter((e) => e.length > 0);
     });
-    throw new Error(`Payment failed. Errors: ${errorMessages.join('; ') || 'Unknown error. Check verbose output for details.'}`);
-  } else {
-    // If we can't determine success/failure clearly, check URL
-    const finalUrl = page.url();
-    if (finalUrl.includes('Payment.aspx') && !finalUrl.includes('Confirmation')) {
+
+    if (errorMessages.length > 0) {
+      throw new Error(`Payment failed. Errors: ${errorMessages.join('; ')}`);
+    }
+
+    // No clear success or error — check if we're still on the payment form
+    const paymentFormVisible = await page.evaluate(() => {
+      const payDiv = document.getElementById('ctl00_ContentPlaceHolder1_PaymentControl1_divPayment');
+      return payDiv !== null && payDiv.style.display !== 'none';
+    });
+
+    if (paymentFormVisible) {
       throw new Error('Payment may have failed - still on payment page. Enable --verbose to inspect the page.');
     }
     console.log('Payment submission completed. Please verify the confirmation details.');
