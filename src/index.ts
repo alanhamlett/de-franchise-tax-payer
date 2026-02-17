@@ -287,10 +287,7 @@ async function page2_reviewAndPay(page: Page, options: CLIOptions): Promise<void
   // Click "Pay Taxes" button. This may trigger multiple navigations (ASP.NET
   // postback then redirect to Payment.aspx), so keep waiting until the URL
   // contains "Payment.aspx" and the page is stable.
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {}),
-    page.click('#ctl00_ContentPlaceHolder1_btnPayTax'),
-  ]);
+  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {}), page.click('#ctl00_ContentPlaceHolder1_btnPayTax')]);
 
   // Wait for possible second navigation (redirect to Payment.aspx)
   if (!page.url().includes('Payment.aspx')) {
@@ -310,10 +307,7 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
   // Select payment type. The dropdown defaults to ACH. Only change it if needed,
   // since the onchange triggers an ASP.NET postback that reloads the page.
   const payTypeValue = options.paymentMethod === 'ach' ? 'ach' : 'cc';
-  const currentPayType = await page.$eval(
-    '#ctl00_ContentPlaceHolder1_PaymentControl1_DrpPayType',
-    (el) => (el as HTMLSelectElement).value
-  );
+  const currentPayType = await page.$eval('#ctl00_ContentPlaceHolder1_PaymentControl1_DrpPayType', (el) => (el as HTMLSelectElement).value);
   if (currentPayType !== payTypeValue) {
     // Set up navigation listener before triggering the change
     const navPromise = page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
@@ -367,10 +361,7 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
   await page.select('#ctl00_ContentPlaceHolder1_PaymentControl1_drpState', options.state);
 
   // Verify state was actually set — showprovince() can reset it
-  const selectedState = await page.$eval(
-    '#ctl00_ContentPlaceHolder1_PaymentControl1_drpState',
-    (el) => (el as HTMLSelectElement).value,
-  );
+  const selectedState = await page.$eval('#ctl00_ContentPlaceHolder1_PaymentControl1_drpState', (el) => (el as HTMLSelectElement).value);
   if (selectedState !== options.state) {
     console.log(`State was reset (got "${selectedState}"), re-selecting "${options.state}"...`);
     await page.select('#ctl00_ContentPlaceHolder1_PaymentControl1_drpState', options.state);
@@ -426,7 +417,7 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
         if (!window.location.href.includes('Payment.aspx')) return true;
         return false;
       },
-      { timeout: 120000 }
+      { timeout: 120000 },
     );
   } catch {
     // Timeout waiting for change — fall through to check what we have
@@ -452,9 +443,9 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
   const hasConfirmation =
     !paymentFormVisible &&
     (pageTextLower.includes('confirmation number') ||
-    pageTextLower.includes('receipt') ||
-    pageTextLower.includes('thank you') ||
-    pageTextLower.includes('payment has been'));
+      pageTextLower.includes('receipt') ||
+      pageTextLower.includes('thank you') ||
+      pageTextLower.includes('payment has been'));
 
   if (hasConfirmation) {
     console.log('Payment submitted successfully!');
@@ -489,7 +480,7 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
       await printPageHtml(page, options.verbose);
       throw new Error('Payment may have failed - still on payment page. Enable --verbose to inspect the page.');
     }
-    console.log('Payment submission completed. Please verify the confirmation details.');
+    console.log('Payment submitted. Please check for a confirmation email.');
     await printPageHtml(page, options.verbose);
   }
 }
