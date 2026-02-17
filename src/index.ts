@@ -430,59 +430,51 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
   // Verify payment success
   console.log('Step 3: Checking payment result...');
 
-  const pageText = await page.evaluate(() => document.body.innerText);
-  const pageTextLower = pageText.toLowerCase();
+  const currentUrl = page.url();
 
-  // Check if we're still on the payment form (form still visible = not yet submitted)
-  const paymentFormVisible = await page.evaluate(() => {
-    const payDiv = document.getElementById('ctl00_ContentPlaceHolder1_PaymentControl1_divPayment');
-    return payDiv !== null && payDiv.style.display !== 'none';
+  // Best indicator: successful payment navigates to FilingStatus.aspx
+  if (currentUrl.includes('FilingStatus.aspx')) {
+    // Extract details from the success page
+    const successInfo = await page.evaluate(() => {
+      const successMsg = document.querySelector('.successmsg')?.textContent?.trim() || '';
+      const submitDate = document.getElementById('ctl00_ContentPlaceHolder1_lblSubmitDate')?.textContent?.trim() || '';
+      const fileNumber = document.getElementById('ctl00_ContentPlaceHolder1_lblFileNumber')?.textContent?.trim() || '';
+      return { successMsg, submitDate, fileNumber };
+    });
+    console.log(`Payment submitted successfully! ${successInfo.successMsg}`);
+    if (successInfo.fileNumber) console.log(`  File Number: ${successInfo.fileNumber}`);
+    if (successInfo.submitDate) console.log(`  Submitted: ${successInfo.submitDate}`);
+    await printPageHtml(page, options.verbose);
+    return;
+  }
+
+  // Still on Payment.aspx — check for validation errors
+  const errorMessages = await page.evaluate(() => {
+    const errors: string[] = [];
+    document.querySelectorAll('.errorvalidation, .reqdtxt').forEach((el) => {
+      const style = window.getComputedStyle(el);
+      if (style.display !== 'none' && el.textContent?.trim()) {
+        errors.push(el.textContent.trim());
+      }
+    });
+    // Also check validation summaries that became visible
+    document.querySelectorAll('[id*="ValidationSummary"]').forEach((el) => {
+      const style = window.getComputedStyle(el);
+      if (style.display !== 'none' && el.textContent?.trim()) {
+        errors.push(el.textContent.trim());
+      }
+    });
+    return errors.filter((e) => e.length > 0);
   });
 
-  // Check for success indicators — only trust them if the payment form is gone
-  const hasConfirmation =
-    !paymentFormVisible &&
-    (pageTextLower.includes('confirmation number') ||
-      pageTextLower.includes('receipt') ||
-      pageTextLower.includes('thank you') ||
-      pageTextLower.includes('payment has been'));
-
-  if (hasConfirmation) {
-    console.log('Payment submitted successfully!');
+  if (errorMessages.length > 0) {
     await printPageHtml(page, options.verbose);
-  } else {
-    // Check for validation errors (visible error spans, not the static warning note)
-    const errorMessages = await page.evaluate(() => {
-      const errors: string[] = [];
-      document.querySelectorAll('.errorvalidation, .reqdtxt').forEach((el) => {
-        const style = window.getComputedStyle(el);
-        if (style.display !== 'none' && el.textContent?.trim()) {
-          errors.push(el.textContent.trim());
-        }
-      });
-      // Also check validation summaries that became visible
-      document.querySelectorAll('[id*="ValidationSummary"]').forEach((el) => {
-        const style = window.getComputedStyle(el);
-        if (style.display !== 'none' && el.textContent?.trim()) {
-          errors.push(el.textContent.trim());
-        }
-      });
-      return errors.filter((e) => e.length > 0);
-    });
-
-    if (errorMessages.length > 0) {
-      await printPageHtml(page, options.verbose);
-      throw new Error(`Payment failed. Errors: ${errorMessages.join('; ')}`);
-    }
-
-    // No clear success or error — check if we're still on the payment form
-    if (paymentFormVisible) {
-      await printPageHtml(page, options.verbose);
-      throw new Error('Payment may have failed - still on payment page. Enable --verbose to inspect the page.');
-    }
-    console.log('Payment submitted. Please check for a confirmation email.');
-    await printPageHtml(page, options.verbose);
+    throw new Error(`Payment failed. Errors: ${errorMessages.join('; ')}`);
   }
+
+  // No clear success or error
+  await printPageHtml(page, options.verbose);
+  throw new Error(`Payment may have failed — ended on unexpected page: ${currentUrl}. Enable --verbose to inspect the page.`);
 }
 
 async function main(): Promise<void> {
