@@ -2,6 +2,7 @@
 
 import { Command } from 'commander';
 import puppeteer, { Browser, Page } from 'puppeteer';
+import * as readline from 'readline';
 import Anthropic from '@anthropic-ai/sdk';
 
 const BASE_URL = 'https://icis.corp.delaware.gov/ecorp/logintax.aspx?FilingType=FranchiseTax';
@@ -30,6 +31,7 @@ interface CLIOptions {
   expDate?: string;
   cvv?: string;
   verbose: boolean;
+  enableAnthropic: boolean;
 }
 
 function parseOptions(): CLIOptions {
@@ -57,6 +59,7 @@ function parseOptions(): CLIOptions {
     .option('--exp-date <date>', 'Card expiration date (MM/YYYY)')
     .option('--cvv <cvv>', 'Card CVV number')
     .option('--verbose', 'Print page HTML at each step', false)
+    .option('--enable-anthropic', 'Use Anthropic API to solve captcha automatically', false)
     .parse();
 
   const opts = program.opts();
@@ -104,7 +107,21 @@ function parseOptions(): CLIOptions {
     expDate: opts.expDate,
     cvv: opts.cvv,
     verbose: opts.verbose ?? false,
+    enableAnthropic: opts.enableAnthropic ?? false,
   };
+}
+
+function promptUser(question: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
 }
 
 async function solveCaptcha(imageBase64: string): Promise<string> {
@@ -168,8 +185,18 @@ async function page1_enterFileNumber(page: Page, options: CLIOptions): Promise<v
 
     const captchaBase64 = await captchaImg.screenshot({ encoding: 'base64' });
 
-    const captchaCode = await solveCaptcha(captchaBase64 as string);
-    console.log(`Step 1: Captcha attempt ${attempt}: "${captchaCode}"`);
+    // Display captcha image in terminal (iTerm2/Kitty/VSCode inline image protocol)
+    console.log('Step 1: Captcha image:');
+    process.stdout.write(`\x1b]1337;File=inline=1;width=30;preserveAspectRatio=1:${captchaBase64}\x07\n`);
+
+    let captchaCode: string;
+    if (options.enableAnthropic) {
+      captchaCode = await solveCaptcha(captchaBase64 as string);
+      console.log(`Step 1: Captcha attempt ${attempt} (Anthropic): "${captchaCode}"`);
+    } else {
+      captchaCode = await promptUser('Enter captcha code: ');
+      console.log(`Step 1: Captcha attempt ${attempt}: "${captchaCode}"`);
+    }
 
     // Clear any previous captcha input and type new one
     const captchaInput = '#ctl00_ContentPlaceHolder1_ecorpCaptcha1_txtCaptcha';

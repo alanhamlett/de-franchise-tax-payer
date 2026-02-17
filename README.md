@@ -9,8 +9,7 @@ npm install
 npm run build
 ```
 
-Requires `ANTHROPIC_API_KEY` env var for captcha solving (uses Claude vision).
-Create one at https://console.anthropic.com/settings/keys.
+By default, the captcha is displayed in the terminal and you enter the code manually. To automate captcha solving with Claude vision, pass `--enable-anthropic` and set the `ANTHROPIC_API_KEY` env var. Create one at https://console.anthropic.com/settings/keys.
 
 ## Usage
 
@@ -61,3 +60,4 @@ node dist/index.js \
 | `--cvv` | CC only | CVV number |
 | `--max-payment` | No | Max allowed payment amount (default: `300`) |
 | `--verbose` | No | Print page HTML at each step |
+| `--enable-anthropic` | No | Use Anthropic API to solve captcha automatically |

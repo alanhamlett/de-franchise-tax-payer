@@ -16,7 +16,7 @@ node dist/index.js   # run with --help for usage
 
 Three-page Puppeteer flow against `icis.corp.delaware.gov/ecorp/`:
 
-1. **Page 1** (`logintax.aspx`) — File number entry + captcha. Captcha is solved by screenshotting the image element and sending it to Claude Sonnet via the Anthropic SDK. Retries up to 5 times with captcha refresh.
+1. **Page 1** (`logintax.aspx`) — File number entry + captcha. Captcha image is displayed inline in the terminal and user is prompted to enter the code manually. With `--enable-anthropic`, captcha is instead solved automatically via Claude Sonnet vision API. Retries up to 5 times with captcha refresh.
 2. **Page 2** (`LlcFiling.aspx`) — Tax review. Checks entity is active, verifies amount due <= `--max-payment`, clicks "Pay Taxes".
 3. **Page 3** (`Payment.aspx`) — Payment form. Fills ACH or CC fields based on `--payment-method`, address, phone (split into 3 fields), email, checks authorize box, submits, then verifies success/failure from the response page.
 
@@ -28,7 +28,7 @@ Three-page Puppeteer flow against `icis.corp.delaware.gov/ecorp/`:
 - Credit card expiration is two separate dropdowns: month (`DrpExpMonth`) and year (`DrpExpYear`). CLI accepts `MM/YYYY` format.
 - Country dropdown defaults to `US`. Only US is currently supported.
 - `--verbose` prints full page HTML at each step for debugging.
-- Captcha solving requires `ANTHROPIC_API_KEY` env var.
+- Captcha is manual by default (user enters code at prompt). `--enable-anthropic` enables automatic solving via Claude vision (requires `ANTHROPIC_API_KEY` env var).
 
 ## Dependencies
 
