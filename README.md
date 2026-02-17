@@ -61,3 +61,4 @@ node dist/index.js \
 | `--max-payment` | No | Max allowed payment amount (default: `300`) |
 | `--verbose` | No | Print page HTML at each step |
 | `--enable-anthropic` | No | Use Anthropic API to solve captcha automatically |
+| `--no-prompt` | No | Skip payment confirmation prompt before submit; YOLO mode |
