@@ -295,23 +295,25 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
 
   await printPageHtml(page, options.verbose);
 
-  // Select payment type and trigger the onchange handler to show the right fields.
-  // The dropdown's onchange may trigger an ASP.NET partial postback (UpdatePanel),
-  // so we wait for navigation to settle afterwards.
+  // Select payment type. The dropdown defaults to ACH. Only change it if needed,
+  // since the onchange triggers an ASP.NET postback that reloads the page.
   const payTypeValue = options.paymentMethod === 'ach' ? 'ach' : 'cc';
-  await page.select('#ctl00_ContentPlaceHolder1_PaymentControl1_DrpPayType', payTypeValue);
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {}),
-    page.evaluate(() => {
+  const currentPayType = await page.$eval(
+    '#ctl00_ContentPlaceHolder1_PaymentControl1_DrpPayType',
+    (el) => (el as HTMLSelectElement).value
+  );
+  if (currentPayType !== payTypeValue) {
+    // Set up navigation listener before triggering the change
+    const navPromise = page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
+    await page.select('#ctl00_ContentPlaceHolder1_PaymentControl1_DrpPayType', payTypeValue);
+    await page.evaluate(() => {
       if (typeof (window as any).showpaymenttype === 'function') {
         (window as any).showpaymenttype();
-      } else {
-        const select = document.getElementById('ctl00_ContentPlaceHolder1_PaymentControl1_DrpPayType') as HTMLSelectElement;
-        select.dispatchEvent(new Event('change'));
       }
-    }),
-  ]);
-  await delay(500);
+    });
+    await navPromise;
+    await delay(1000);
+  }
 
   // Select "Pay Full Amount" radio
   await page.click('#ctl00_ContentPlaceHolder1_PaymentControl1_rbFullAmount');
@@ -382,8 +384,14 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
 
   await printPageHtml(page, options.verbose);
 
-  // Click Submit
-  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }), page.click('#ctl00_ContentPlaceHolder1_PaymentControl1_BtnSave')]);
+  // Click Submit. The page may do a full navigation or an in-place UpdatePanel
+  // postback, so try waiting for navigation but fall back to waiting for the
+  // network to go idle if no navigation occurs.
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {}),
+    page.click('#ctl00_ContentPlaceHolder1_PaymentControl1_BtnSave'),
+  ]);
+  await delay(3000);
 
   await printPageHtml(page, options.verbose);
 
