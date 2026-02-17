@@ -30,6 +30,14 @@ Three-page Puppeteer flow against `icis.corp.delaware.gov/ecorp/`:
 - `--verbose` prints full page HTML at each step for debugging.
 - Captcha is manual by default (user enters code at prompt). `--enable-anthropic` enables automatic solving via Claude vision (requires `ANTHROPIC_API_KEY` env var).
 
+## ASP.NET Postback Gotchas
+
+The site uses ASP.NET WebForms with UpdatePanels. Key things to watch for:
+
+- **Dropdown changes can trigger postbacks.** The payment type dropdown (`DrpPayType`) triggers a page postback/reload on change. Only change it if the current value differs from the desired value. When changing, set up `waitForNavigation` *before* the select/evaluate call to avoid "Execution context was destroyed" errors.
+- **Form submission may not navigate.** The submit button on page 3 may do an in-place UpdatePanel postback rather than a full navigation. Use `.catch(() => {})` on `waitForNavigation` and add a delay to let the page settle.
+- **`--no-prompt`** skips the payment confirmation prompt before submit. By default the user is asked to confirm.
+
 ## Dependencies
 
 - `puppeteer` — browser automation
