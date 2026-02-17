@@ -292,22 +292,22 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
 
   await printPageHtml(page, options.verbose);
 
-  // Select payment type
-  if (options.paymentMethod === 'ach') {
-    await page.select('#ctl00_ContentPlaceHolder1_PaymentControl1_DrpPayType', 'ach');
-  } else {
-    await page.select('#ctl00_ContentPlaceHolder1_PaymentControl1_DrpPayType', 'cc');
-  }
-
-  // Trigger the onchange handler to show the right payment fields
-  await page.evaluate(() => {
-    if (typeof (window as any).showpaymenttype === 'function') {
-      (window as any).showpaymenttype();
-    } else {
-      const select = document.getElementById('ctl00_ContentPlaceHolder1_PaymentControl1_DrpPayType') as HTMLSelectElement;
-      select.dispatchEvent(new Event('change'));
-    }
-  });
+  // Select payment type and trigger the onchange handler to show the right fields.
+  // The dropdown's onchange may trigger an ASP.NET partial postback (UpdatePanel),
+  // so we wait for navigation to settle afterwards.
+  const payTypeValue = options.paymentMethod === 'ach' ? 'ach' : 'cc';
+  await page.select('#ctl00_ContentPlaceHolder1_PaymentControl1_DrpPayType', payTypeValue);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {}),
+    page.evaluate(() => {
+      if (typeof (window as any).showpaymenttype === 'function') {
+        (window as any).showpaymenttype();
+      } else {
+        const select = document.getElementById('ctl00_ContentPlaceHolder1_PaymentControl1_DrpPayType') as HTMLSelectElement;
+        select.dispatchEvent(new Event('change'));
+      }
+    }),
+  ]);
   await delay(500);
 
   // Select "Pay Full Amount" radio
