@@ -32,6 +32,7 @@ interface CLIOptions {
   cvv?: string;
   verbose: boolean;
   enableAnthropic: boolean;
+  noPrompt: boolean;
 }
 
 function parseOptions(): CLIOptions {
@@ -60,6 +61,7 @@ function parseOptions(): CLIOptions {
     .option('--cvv <cvv>', 'Card CVV number')
     .option('--verbose', 'Print page HTML at each step', false)
     .option('--enable-anthropic', 'Use Anthropic API to solve captcha automatically', false)
+    .option('--no-prompt', 'Skip payment confirmation prompt', false)
     .parse();
 
   const opts = program.opts();
@@ -108,6 +110,7 @@ function parseOptions(): CLIOptions {
     cvv: opts.cvv,
     verbose: opts.verbose ?? false,
     enableAnthropic: opts.enableAnthropic ?? false,
+    noPrompt: opts.noPrompt ?? false,
   };
 }
 
@@ -366,7 +369,16 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
   // Check the authorize checkbox
   await page.click('#ctl00_ContentPlaceHolder1_PaymentControl1_ChkAuthorize');
 
-  console.log('Step 3: Payment form filled. Submitting...');
+  console.log('Step 3: Payment form filled.');
+
+  if (!options.noPrompt) {
+    const confirm = await promptUser('Submit payment? (y/n): ');
+    if (confirm.toLowerCase() !== 'y') {
+      throw new Error('Payment cancelled by user.');
+    }
+  }
+
+  console.log('Step 3: Submitting...');
 
   await printPageHtml(page, options.verbose);
 
