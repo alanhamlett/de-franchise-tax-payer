@@ -359,14 +359,15 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
   }
   await page.type('#ctl00_ContentPlaceHolder1_PaymentControl1_TxtCity', options.city);
 
-  // Select state from dropdown
+  // Select country before state — the country dropdown's onchange handler
+  // calls showprovince() which resets drpState.selectedIndex to 0
+  await page.select('#ctl00_ContentPlaceHolder1_PaymentControl1_drpCountry', options.country);
+
+  // Select state from dropdown (must come after country to avoid being reset)
   await page.select('#ctl00_ContentPlaceHolder1_PaymentControl1_drpState', options.state);
 
   // Fill postal code
   await page.type('#ctl00_ContentPlaceHolder1_PaymentControl1_TxtPostalCode', options.zip);
-
-  // Select country
-  await page.select('#ctl00_ContentPlaceHolder1_PaymentControl1_drpCountry', options.country);
 
   // Fill phone number (split into 3 fields: area code, prefix, line)
   const phone = options.phone;
@@ -402,6 +403,9 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
   await page.click('#ctl00_ContentPlaceHolder1_PaymentControl1_BtnSave');
 
   // Wait for the page content to change (payment div disappears or page navigates)
+  // Note: do NOT check for keywords like "successful" in body text here — the payment
+  // form itself contains "whether your request was successful" in a static warning note,
+  // which would cause an immediate false match.
   try {
     await page.waitForFunction(
       () => {
@@ -410,9 +414,6 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
         if (!payDiv || payDiv.style.display === 'none') return true;
         // Or we navigated away from Payment.aspx
         if (!window.location.href.includes('Payment.aspx')) return true;
-        // Or a confirmation/receipt appeared
-        const text = document.body.innerText.toLowerCase();
-        if (text.includes('confirmation') || text.includes('receipt') || text.includes('successful')) return true;
         return false;
       },
       { timeout: 120000 }
@@ -429,14 +430,21 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
   console.log('Step 3: Checking payment result...');
 
   const pageText = await page.evaluate(() => document.body.innerText);
+  const pageTextLower = pageText.toLowerCase();
 
-  // Check for success indicators
+  // Check if we're still on the payment form (form still visible = not yet submitted)
+  const paymentFormVisible = await page.evaluate(() => {
+    const payDiv = document.getElementById('ctl00_ContentPlaceHolder1_PaymentControl1_divPayment');
+    return payDiv !== null && payDiv.style.display !== 'none';
+  });
+
+  // Check for success indicators — only trust them if the payment form is gone
   const hasConfirmation =
-    pageText.toLowerCase().includes('confirmation') ||
-    pageText.toLowerCase().includes('receipt') ||
-    pageText.toLowerCase().includes('successful') ||
-    pageText.toLowerCase().includes('thank you') ||
-    pageText.toLowerCase().includes('payment has been');
+    !paymentFormVisible &&
+    (pageTextLower.includes('confirmation number') ||
+    pageTextLower.includes('receipt') ||
+    pageTextLower.includes('thank you') ||
+    pageTextLower.includes('payment has been'));
 
   if (hasConfirmation) {
     console.log('Payment submitted successfully!');
@@ -467,11 +475,6 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
     }
 
     // No clear success or error — check if we're still on the payment form
-    const paymentFormVisible = await page.evaluate(() => {
-      const payDiv = document.getElementById('ctl00_ContentPlaceHolder1_PaymentControl1_divPayment');
-      return payDiv !== null && payDiv.style.display !== 'none';
-    });
-
     if (paymentFormVisible) {
       await printPageHtml(page, options.verbose);
       throw new Error('Payment may have failed - still on payment page. Enable --verbose to inspect the page.');
