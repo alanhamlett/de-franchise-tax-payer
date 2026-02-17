@@ -440,6 +440,7 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
 
   if (hasConfirmation) {
     console.log('Payment submitted successfully!');
+    await printPageHtml(page, options.verbose);
   } else {
     // Check for validation errors (visible error spans, not the static warning note)
     const errorMessages = await page.evaluate(() => {
@@ -461,6 +462,7 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
     });
 
     if (errorMessages.length > 0) {
+      await printPageHtml(page, options.verbose);
       throw new Error(`Payment failed. Errors: ${errorMessages.join('; ')}`);
     }
 
@@ -471,9 +473,11 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
     });
 
     if (paymentFormVisible) {
+      await printPageHtml(page, options.verbose);
       throw new Error('Payment may have failed - still on payment page. Enable --verbose to inspect the page.');
     }
     console.log('Payment submission completed. Please verify the confirmation details.');
+    await printPageHtml(page, options.verbose);
   }
 }
 
