@@ -366,6 +366,16 @@ async function page3_submitPayment(page: Page, options: CLIOptions): Promise<voi
   // Select state from dropdown (must come after country to avoid being reset)
   await page.select('#ctl00_ContentPlaceHolder1_PaymentControl1_drpState', options.state);
 
+  // Verify state was actually set — showprovince() can reset it
+  const selectedState = await page.$eval(
+    '#ctl00_ContentPlaceHolder1_PaymentControl1_drpState',
+    (el) => (el as HTMLSelectElement).value,
+  );
+  if (selectedState !== options.state) {
+    console.log(`State was reset (got "${selectedState}"), re-selecting "${options.state}"...`);
+    await page.select('#ctl00_ContentPlaceHolder1_PaymentControl1_drpState', options.state);
+  }
+
   // Fill postal code
   await page.type('#ctl00_ContentPlaceHolder1_PaymentControl1_TxtPostalCode', options.zip);
 
